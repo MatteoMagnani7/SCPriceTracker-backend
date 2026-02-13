@@ -36,13 +36,38 @@ const performScrape = async () => {
     });
 
     const result = await page.evaluate(() => {
-      const amount = document.querySelector(
+      // Seleziona TUTTI gli elementi con questi attributi
+      const priceElements = document.querySelectorAll(
         '[data-cy-id="price_unit__value"]',
-      )?.innerText;
-      const currency = document.querySelector(
+      );
+      const currencyElements = document.querySelectorAll(
         '[data-cy-id="price_unit__currency"]',
-      )?.innerText;
-      return amount && currency ? `${amount} ${currency}` : null;
+      );
+
+      if (priceElements.length === 0) return null;
+
+      // Crea un array di oggetti con prezzo numerico e valuta
+      const prices = Array.from(priceElements).map((el, index) => {
+        const priceText = el.innerText.trim();
+        const currency = currencyElements[index]?.innerText.trim() || "";
+        // Converte il prezzo in numero (rimuove virgole, spazi, ecc.)
+        const numericPrice = parseFloat(priceText.replace(/[^0-9.]/g, ""));
+        return {
+          amount: priceText,
+          currency: currency,
+          numeric: numericPrice,
+        };
+      });
+
+      // Filtra prezzi validi e trova il minimo
+      const validPrices = prices.filter((p) => !isNaN(p.numeric));
+      if (validPrices.length === 0) return null;
+
+      const minPrice = validPrices.reduce((min, current) =>
+        current.numeric < min.numeric ? current : min,
+      );
+
+      return `${minPrice.amount} ${minPrice.currency}`;
     });
 
     if (result) {
@@ -56,7 +81,7 @@ const performScrape = async () => {
         DATA_PATH,
         JSON.stringify([newEntry, ...history].slice(0, 100), null, 2),
       );
-      console.log(`Successo: Prezzo attuale ${result}`);
+      console.log(`Successo: Prezzo minimo trovato ${result}`);
     }
   } catch (error) {
     console.error("Errore durante lo scraping pianificato:", error.message);
@@ -65,9 +90,8 @@ const performScrape = async () => {
   }
 };
 
-// Pianificazione: '0 18 * * *' significa Minuto 0, Ora 18, Ogni giorno
 cron.schedule(
-  "0 15 * * *",
+  "49 18 * * *",
   () => {
     performScrape();
   },
